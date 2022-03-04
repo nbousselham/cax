@@ -148,7 +148,7 @@ jobs:
         uses: lerer/veracode-sca@v1.0.6
 
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.SRCCLR_SCM_TOKEN}}
           quick: true
           create-issues: true 
           fail-on-cvss: 1
