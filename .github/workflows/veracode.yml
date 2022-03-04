@@ -1,35 +1,23 @@
-# This workflow uses actions that are not certified by GitHub.
-# This workflow will initiate a Veracode Static Analysis Pipeline scan, return a results.json and convert to SARIF for upload as a code scanning alert
 name: Veracode Static Analysis Pipeline Scan
 
 on:
   push:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 permissions:
   contents: read
 
 jobs:
-  # This workflow contains a job to build and submit pipeline scan, you will need to customize the build process accordingly and make sure the artifact you build is used as the file input to the pipeline scan file parameter
-  build-and-pipeline-scan:
-    # The type of runner that the job will run on
-    #permissions:
-     # contents: read # for actions/checkout to fetch code
-      #security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
+
+  build:
     runs-on: ubuntu-latest
     steps:
-
-    # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it and copies all sources into ZIP file for submitting for analysis. Replace this section with your applications build steps
     - uses: actions/checkout@v2
       with:
         repository: ''
-    
+        
     - name: Build with Maven
       working-directory: ./app/
       run: mvn -B package --file pom.xml
-    
-    # Nabil - You can use this command to Zip a specific folder for scanning
-    # run: zip -r veracode-scan-target.zip ./
     - uses: actions/upload-artifact@v1
       with:
         name: my-artifact
@@ -49,29 +37,103 @@ jobs:
 #          exclude: '*.js'
 #          include: '*.war'
 #          criticality: 'VeryHigh'
-  
-    # download the Veracode Static Analysis Pipeline scan jar
-    - run: curl --silent --show-error --fail -O https://downloads.veracode.com/securityscan/pipeline-scan-LATEST.zip
-    - run: unzip -o pipeline-scan-LATEST.zip
+  pipeline-scan:
+    needs: build
+    runs-on: ubuntu-latest
+    container: 
+      image: veracode/pipeline-scan:latest
+      options: --user root
+    steps:
+      - name: get archive
+        uses: actions/download-artifact@v2
+        with:
+          name: verademo.war
+          path: /tmp
+      - name: pipeline-scan
+        run: | 
+          java -jar /opt/veracode/pipeline-scan.jar \
+            -vid "${{secrets.VERACODE_API_ID}}" \
+            -vkey "${{secrets.VERACODE_API_KEY}}" \
+            --fail_on_severity="Very High, High" \
+            --file app/target/verademo.war \
+            -jf results.json \
+            -fjf filtered_results.json 
+        continue-on-error: true
 
-    - uses: actions/setup-java@v1
-      with:
-        java-version: 1.8
-    - run: java -jar pipeline-scan.jar --veracode_api_id "${{secrets.VERACODE_API_ID}}" --veracode_api_key "${{secrets.VERACODE_API_KEY}}" --fail_on_severity="Very High, High" --file app/target/verademo.war
-      continue-on-error: true
-    - uses: actions/upload-artifact@v1
-      with:
-        name: ScanResults
-        path: results.json
-    - name: Convert pipeline scan output to SARIF format
-      id: convert
-      uses: veracode/veracode-pipeline-scan-results-to-sarif@master
-      with:
-        source-base-path-1: "^com/veracode:app/src/main/java/com/veracode"
-        source-base-path-2: "^WEB-INF:app/src/main/webapp/WEB-INF"
-        pipeline-results-json: results.json
-    
-  # Run a Software Composition Analysis scan
+#    - run: curl --silent --show-error --fail -O https://downloads.veracode.com/securityscan/pipeline-scan-LATEST.zip
+ #   - run: unzip -o pipeline-scan-LATEST.zip
+
+  #  - uses: actions/setup-java@v1
+   #   with:
+    #    java-version: 1.8
+    #- run: java -jar pipeline-scan.jar --veracode_api_id "${{secrets.VERACODE_API_ID}}" --veracode_api_key "${{secrets.VERACODE_API_KEY}}" --fail_on_severity="Very High, High" --file app/target/verademo.war
+     # continue-on-error: true
+#    - uses: actions/upload-artifact@v1
+ #     with:
+  #      name: ScanResults
+    #    path: results.json
+#    - name: Convert pipeline scan output to SARIF format
+ #     id: convert
+  #    uses: veracode/veracode-pipeline-scan-results-to-sarif@master
+   #   with:
+    #    source-base-path-1: "^com/veracode:app/src/main/java/com/veracode"
+     #   source-base-path-2: "^WEB-INF:app/src/main/webapp/WEB-INF"
+      #  pipeline-results-json: results.json
+
+      - name: save standard results
+        uses: actions/upload-artifact@v1
+        with:
+          name: PipelineScanResults
+          path: results.json
+      - name: save filtered results
+        uses: actions/upload-artifact@v1
+        with:
+          name: filtered-results
+          path: filtered_results.json
+
+
+
+  import-findings-to-code-scanning-alerts:
+    needs: pipeline-scan
+    runs-on: ubuntu-latest
+    steps:  
+      - name: get scan results
+        uses: actions/download-artifact@v2
+        with:
+          name: PipelineScanResults
+      - name: Convert pipeline scan output to SARIF format 
+        id: convert
+        uses: veracode/veracode-pipeline-scan-results-to-sarif@v0.1.5
+        with:
+          pipeline-results-json: results.json
+          source-base-path-1: "^com/veracode:src/main/java/com/veracode"
+          source-base-path-2: "^WEB-INF:src/main/webapp/WEB-INF"
+      - uses: github/codeql-action/upload-sarif@v1
+        with:
+          sarif_file: veracode-results.sarif
+
+
+  # Create issues from piepline scan
+  import-issues:
+    needs: pipeline-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: get scan results
+        uses: actions/download-artifact@v2
+        with:
+          name: filtered-results
+
+      - name: import flaws as issues
+        uses: buzzcode/veracode-flaws-to-issues@v1
+        with:
+          scan-results-json: 'filtered_results.json'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          source_base_path_1: "com/veracode:src/main/java/com/veracode" 
+          source_base_path_2: "WEB-INF:src/main/webapp/WEB-INF"
+          commit-hash: ${{ GITHUB.SHA }}
+
+
+# Run a Software Composition Analysis scan
   software-composition-analysis:
     runs-on: ubuntu-latest
     steps:
