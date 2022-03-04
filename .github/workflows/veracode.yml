@@ -83,7 +83,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ~/.m2
-       # key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
   #  - run: curl -sSL https://download.sourceclear.com/ci.sh | bash -s scan . --update-advisor 2>&1 | tee sca_output.txt
     - run: curl -sSL https://download.sourceclear.com/ci.sh | bash -s scan . --update-advisor
       env:
