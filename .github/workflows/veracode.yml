@@ -135,8 +135,21 @@ jobs:
           commit-hash: ${{ GITHUB.SHA }}
 
 
+  veracode-sca-task:
+    runs-on: ubuntu-latest
+    name: Scan repository for Issues
 
-      - name: SCA Scan
-        env: 
-          SRCCLR_API_TOKEN: ${{secrets.SRCCLR_API_TOKEN}}
-        run: curl -sSL https://download.sourceclear.com/ci.sh | sh -s scan .
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Run Veracode SCA
+        env:
+          SRCCLR_API_TOKEN: ${{ secrets.SRCCLR_API_TOKEN }}
+        uses: lerer/veracode-sca@v1.0.6
+
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          quick: true
+          create-issues: true 
+          fail-on-cvss: 1
+          min-cvss-for-issue: 1
