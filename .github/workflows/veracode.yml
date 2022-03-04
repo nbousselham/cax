@@ -23,8 +23,10 @@ jobs:
         name: my-artifact
         path: app/target/verademo.war
     
-    - name: Veracode Upload And Scan
-      uses: veracode/veracode-uploadandscan-action@0.2.1
+  policy-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: veracode/veracode-uploadandscan-action@0.2.1
       with:
           appname: 'GitHub_cax'
           createprofile: true
@@ -37,6 +39,8 @@ jobs:
 #          exclude: '*.js'
 #          include: '*.war'
 #          criticality: 'VeryHigh'
+      continue-on-error: true
+
   pipeline-scan:
     needs: build
     runs-on: ubuntu-latest
@@ -90,8 +94,6 @@ jobs:
         with:
           name: filtered-results
           path: filtered_results.json
-
-
 
   import-findings-to-code-scanning-alerts:
     needs: pipeline-scan
