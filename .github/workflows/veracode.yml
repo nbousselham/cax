@@ -34,7 +34,22 @@ jobs:
       with:
         name: my-artifact
         path: app/target/verademo.war
-        
+    
+    - name: Veracode Upload And Scan
+      uses: veracode/veracode-uploadandscan-action@0.2.1
+      with:
+          appname: 'GitHub_cax'
+          createprofile: true
+          filepath: 'app/target/verademo.war'
+          vid: '${{secrets.VERACODE_API_ID}}'
+          vkey: '${{secrets.VERACODE_API_KEY}}'
+#          createsandbox: 'true'
+#          sandboxname: 'SANDBOXNAME'
+#          scantimeout: 0
+#          exclude: '*.js'
+#          include: '*.war'
+#          criticality: 'VeryHigh'
+  
     # download the Veracode Static Analysis Pipeline scan jar
     - run: curl --silent --show-error --fail -O https://downloads.veracode.com/securityscan/pipeline-scan-LATEST.zip
     - run: unzip -o pipeline-scan-LATEST.zip
